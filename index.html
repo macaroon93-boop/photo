@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>월별 사진 정리 체크리스트</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Noto Sans KR -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            200: '#bae0fd',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f8fafc;
+        }
+        .month-card {
+            transition: all 0.2s ease-in-out;
+        }
+        .month-card.completed {
+            background-color: #eff6ff;
+            border-color: #93c5fd;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 pb-16">
+
+    <!-- 상단 고정 헤더 & 프로그레스 바 -->
+    <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div class="max-w-4xl mx-auto px-4 py-4">
+            <div class="flex flex-row items-center justify-between gap-3 mb-3">
+                <div>
+                    <h1 class="text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-folder-open text-blue-500"></i>
+                        사진 정리 체크리스트
+                    </h1>
+                    <p class="text-xs md:text-sm text-slate-500 mt-0.5">월별 완료 여부를 체크하여 진행 상황을 기록하세요.</p>
+                </div>
+                <button id="reset-all-btn" class="text-xs md:text-sm px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-red-500 transition duration-150 flex items-center gap-1.5 shadow-sm">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span>초기화</span>
+                </button>
+            </div>
+
+            <!-- 프로그레스 영역 -->
+            <div class="bg-blue-50/70 rounded-xl p-3.5 border border-blue-100">
+                <div class="flex justify-between items-center text-xs md:text-sm font-semibold mb-2">
+                    <span class="text-slate-600 flex items-center gap-1.5">
+                        <i class="fa-solid fa-chart-line text-blue-500"></i> 전체 진행률
+                    </span>
+                    <span id="progress-text" class="text-blue-600 font-bold text-base">0 / 88 (0%)</span>
+                </div>
+                <div class="w-full bg-slate-200/80 rounded-full h-3 overflow-hidden">
+                    <div id="progress-bar" class="bg-blue-500 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 메인 콘텐츠 영역 -->
+    <main class="max-w-4xl mx-auto px-4 mt-6">
+        <div id="years-container" class="space-y-6">
+            <!-- 자바스크립트에 의해 동적으로 연도별 카드가 삽입됩니다 -->
+        </div>
+    </main>
+
+    <!-- 커스텀 알림 토스트 -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-slate-800 text-white text-sm px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 transition-all duration-300 opacity-0 translate-y-4 pointer-events-none z-50">
+        <i class="fa-solid fa-check-circle text-blue-400"></i>
+        <span id="toast-message">저장되었습니다.</span>
+    </div>
+
+    <script>
+        // 날짜 데이터 정의
+        const yearData = [
+            { year: 2019, months: [7, 8, 9, 10, 11, 12] },
+            { year: 2020, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+            { year: 2021, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+            { year: 2022, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+            { year: 2023, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+            { year: 2024, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+            { year: 2025, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+            { year: 2026, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] }
+        ];
+
+        const STORAGE_KEY = 'photo_checklist_status_v2';
+        let completedState = {};
+
+        // 전체 월 개수 계산 (88개)
+        const totalMonths = yearData.reduce((acc, curr) => acc + curr.months.length, 0);
+
+        // localStorage에서 데이터 로드
+        function loadState() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    completedState = JSON.parse(saved);
+                }
+            } catch (e) {
+                console.error('저장된 데이터를 불러오는 데 실패했습니다.', e);
+                completedState = {};
+            }
+        }
+
+        // localStorage에 데이터 저장
+        function saveState() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(completedState));
+            } catch (e) {
+                console.error('데이터를 저장하는 데 실패했습니다.', e);
+            }
+        }
+
+        // 화면 랜더링
+        function renderUI() {
+            const container = document.getElementById('years-container');
+            container.innerHTML = '';
+
+            yearData.forEach(item => {
+                const year = item.year;
+                const months = item.months;
+
+                const yearCompletedCount = months.filter(m => completedState[`${year}-${m}`]).length;
+                const isAllYearCompleted = yearCompletedCount === months.length;
+
+                const yearCard = document.createElement('section');
+                yearCard.className = 'bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm';
+
+                yearCard.innerHTML = `
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                        <div class="flex items-baseline gap-2.5">
+                            <h2 class="text-xl font-bold text-slate-800">${year}년</h2>
+                            <span class="text-xs text-slate-400 font-medium">${yearCompletedCount} / ${months.length} 완료</span>
+                        </div>
+                        <button 
+                            onclick="toggleYear(${year}, ${!isAllYearCompleted})"
+                            class="text-xs font-medium px-3 py-1.5 rounded-lg border transition duration-150 ${
+                                isAllYearCompleted 
+                                ? 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100' 
+                                : 'border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100'
+                            }">
+                            ${isAllYearCompleted ? '<i class="fa-solid fa-xmark mr-1"></i>해제' : '<i class="fa-solid fa-check mr-1"></i>전체 선택'}
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+                        ${months.map(month => {
+                            const key = `${year}-${month}`;
+                            const isDone = !!completedState[key];
+                            return `
+                                <label 
+                                    class="month-card cursor-pointer p-3 rounded-xl border flex items-center justify-between select-none ${
+                                        isDone ? 'completed border-blue-300' : 'bg-slate-50 border-slate-200/80 hover:bg-slate-100'
+                                    }"
+                                >
+                                    <div class="flex items-center gap-2">
+                                        <input 
+                                            type="checkbox" 
+                                            class="w-4 h-4 rounded text-blue-600 focus:ring-blue-400 cursor-pointer accent-blue-600"
+                                            ${isDone ? 'checked' : ''}
+                                            onchange="toggleMonth('${key}')"
+                                        >
+                                        <span class="text-sm font-semibold ${isDone ? 'text-blue-900' : 'text-slate-700'}">${month}월</span>
+                                    </div>
+                                    ${isDone ? '<i class="fa-solid fa-check text-xs text-blue-500"></i>' : ''}
+                                </label>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+                container.appendChild(yearCard);
+            });
+
+            updateProgress();
+        }
+
+        // 상단 진행률 업데이트
+        function updateProgress() {
+            let completedCount = 0;
+            yearData.forEach(item => {
+                item.months.forEach(month => {
+                    if (completedState[`${item.year}-${month}`]) {
+                        completedCount++;
+                    }
+                });
+            });
+
+            const percentage = Math.round((completedCount / totalMonths) * 100);
+            
+            document.getElementById('progress-text').textContent = `${completedCount} / ${totalMonths} (${percentage}%)`;
+            document.getElementById('progress-bar').style.width = `${percentage}%`;
+        }
+
+        // 개별 월 체크 상태 토글
+        window.toggleMonth = function(key) {
+            completedState[key] = !completedState[key];
+            saveState();
+            renderUI();
+        };
+
+        // 연도 전체 선택/해제
+        window.toggleYear = function(year, targetState) {
+            const item = yearData.find(d => d.year === year);
+            if (!item) return;
+
+            item.months.forEach(m => {
+                completedState[`${year}-${m}`] = targetState;
+            });
+
+            saveState();
+            renderUI();
+            showToast(`${year}년 데이터가 ${targetState ? '전체 선택' : '해제'}되었습니다.`);
+        };
+
+        // 전체 초기화 기능
+        document.getElementById('reset-all-btn').addEventListener('click', () => {
+            if (confirm('모든 체크 항목을 초기화하시겠습니까?')) {
+                completedState = {};
+                saveState();
+                renderUI();
+                showToast('모든 항목이 초기화되었습니다.');
+            }
+        });
+
+        // 토스트 메시지 출력
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            toastMessage.textContent = msg;
+            
+            toast.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
+            toast.classList.add('opacity-100', 'translate-y-0');
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
+            }, 2000);
+        }
+
+        // 페이지 로드 시 초기화
+        window.onload = function() {
+            loadState();
+            renderUI();
+        };
+    </script>
+</body>
+</html>
